@@ -9,8 +9,15 @@ from .project import DUCKED_VOLUME, FULL_VOLUME, _find_vo_files
 from .storyline import Scene, Storyline
 
 GUIDE_FILENAMES = ("guide.txt", "editing_guide.txt", "edit_guide.txt")
-DEFAULT_SECTION_SECONDS = 12.0
-PRE_ROLL_FRACTION = 0.7  # most of the window leads up to the anchor moment
+DEFAULT_SECTION_SECONDS = 6.0
+MIN_SECTION_SECONDS = 3.0
+# The anchor (an OCR-confirmed graphic/rating reveal, or a loudness peak
+# from crowd/commentary reaction) consistently lands AT OR AFTER the actual
+# moment a guide note describes ("save", "goal") — never before it. So the
+# window needs to end close to the anchor, not straddle it: almost all of
+# the clip is what leads up to and includes the moment itself.
+PRE_ROLL_FRACTION = 0.88
+MIN_POST_ROLL_SECONDS = 0.75  # small trailing buffer so cuts aren't mid-action
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
 
@@ -57,8 +64,8 @@ def load_guide_project(project_dir: Path, guide_file: Path, *, verbose: bool = F
         file_duration = file_durations[anchor.file]
 
         duration = _section_duration(section)
-        pre = duration * PRE_ROLL_FRACTION
-        post = duration - pre
+        post = min(duration - MIN_POST_ROLL_SECONDS, max(MIN_POST_ROLL_SECONDS, duration * (1 - PRE_ROLL_FRACTION)))
+        pre = duration - post
         start = max(0.0, anchor.time - pre)
         end = min(file_duration, anchor.time + post)
 
@@ -91,8 +98,14 @@ def load_guide_project(project_dir: Path, guide_file: Path, *, verbose: bool = F
 def _section_duration(section) -> float:
     if section.target_length:
         lo, hi = section.target_length
-        return (lo + hi) / 2
-    return DEFAULT_SECTION_SECONDS
+        # Bias toward the shorter end of the guide's own range rather than
+        # the midpoint — a tight cut on the actual moment reads better than
+        # a loose one, and the guide's lower bound is already an editor's
+        # judgment call on the minimum that reads clearly.
+        duration = lo + (hi - lo) * 0.25
+    else:
+        duration = DEFAULT_SECTION_SECONDS
+    return max(MIN_SECTION_SECONDS, duration)
 
 
 def _words(text: str) -> set:
