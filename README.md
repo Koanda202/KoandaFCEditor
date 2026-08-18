@@ -10,6 +10,9 @@ at a folder and it does the rest.
 - Python 3.9+
 - [ffmpeg](https://ffmpeg.org/download.html) (with `ffprobe`) on your `PATH`
 - `PyYAML` (installed via the steps below)
+- [tesseract](https://github.com/tesseract-ocr/tesseract) on your `PATH` —
+  only needed for **guide-driven editing** (below); story.txt mode doesn't
+  use it
 
 ## Install
 
@@ -95,6 +98,57 @@ Two ways to fix it, without giving up the automation for everything else:
   field in a storyline YAML is optional except `scenes`; anything you don't
   set falls back to sensible defaults, same as project mode.
 
+## Guide-driven editing (for a real shot-by-shot edit script)
+
+If you're editing a story-driven episode rather than a highlight reel, a
+plain `story.txt` line list isn't enough — you want specific VO lines
+placed over specific moments, graphics that appear at the right instant,
+freeze frames, punch-ins, all in a defined order. For that, drop a
+**`guide.txt`** into your project folder instead of `story.txt`:
+
+```
+my-video/
+  clips/
+    match_recording.mp4
+  vo/
+    01_intro.mp3
+    02_reveal.mp3
+    ...              <- one file per VO line in the guide, in guide order
+  guide.txt
+```
+
+`guide.txt` is a structured shot list — ordered `SECTION N — TITLE` blocks,
+each with a `TARGET LENGTH`, `VO` lines (quoted, spoken in order), a
+`GRAPHIC` (on-screen text), and `EDITING` notes for freeze frames /
+punch-in zoom percentages. Any block using this `HEADER` / `-----` /
+content style is understood — write your own guide the same way, or see
+[`examples/project/`](examples/project) for the format in detail.
+
+**How it finds the right moment for each section, since footage isn't
+labeled:** FC/FIFA Career Mode puts a lot of what a guide describes as
+literal text on screen — ratings, OVR/potential numbers, transfer grades,
+scorelines, minute markers, reveal screens. `koanda-editor` OCR-scans your
+recordings for that text and matches it to numbers/phrases in each
+section — these sections are **confirmed**. A section with no on-screen
+signal (a pure gameplay action beat like an assist or a save) can't be
+found this way, so it's **best-guessed** instead, using loudness plus the
+constraint that it must fall chronologically between its confirmed
+neighbors — and it's clearly flagged in the output for you to check:
+
+```bash
+koanda-editor my-video
+
+...
+done: my-video/output/final_video.mp4
+
+1 of 12 section(s) had no on-screen text to confirm the moment — best-guessed instead. Please review:
+  - Section 7 (YALLOP 61' RABONA GOAL): match_recording.mp4 @ 842.3s
+```
+
+OCR results are cached per-recording in `.koanda_cache/` inside your
+project folder, so editing `guide.txt` and re-running doesn't re-scan
+footage that hasn't changed.
+
 ## Running tests
 
 ```bash
@@ -102,7 +156,8 @@ pip install -e ".[dev]"
 pytest
 ```
 
-Story/storyline parsing and peak-picking logic are tested without needing
-ffmpeg. Highlight-detection and VO-matching tests generate real short clips
-with ffmpeg and verify the results — they're skipped automatically if
-ffmpeg/ffprobe aren't on `PATH`.
+Story/storyline/guide parsing and peak-picking logic are tested without
+needing ffmpeg. Highlight-detection, OCR-matching, and VO-matching tests
+generate real short clips with ffmpeg (and read them back with tesseract)
+to verify the results — they're skipped automatically if ffmpeg/ffprobe/
+tesseract aren't on `PATH`.

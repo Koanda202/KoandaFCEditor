@@ -17,6 +17,15 @@ class Scene:
     vo_offset: str = "0"
     vo_volume: float = 1.0
     clip_volume: float = 1.0
+    # Guide-driven scenes only (all optional, no effect when unset):
+    vo_lines: Optional[list] = None  # multiple VO files spoken in sequence
+    vo_pause: float = 0.5            # gap between vo_lines, seconds
+    graphic_text: str = ""           # on-screen text overlay, empty = none
+    graphic_hold_seconds: float = 2.5
+    freeze_seconds: float = 0.0      # freeze the last frame for N extra seconds
+    zoom_percent: float = 0.0        # static punch-in crop, 0 = no zoom
+    confirmed: bool = True           # False = auto-picked without an OCR match
+    guide_number: Optional[int] = None
 
 
 @dataclasses.dataclass

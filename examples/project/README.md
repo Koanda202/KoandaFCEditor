@@ -29,3 +29,11 @@ koanda-editor examples/project
   scene.
 
 Output lands at `examples/project/output/final_video.mp4`.
+
+## Guide-driven mode
+
+[`guide.txt`](guide.txt) in this folder is a small example of the richer
+format — drop it in place of `story.txt` (same `clips/`/`vo/` folders) for
+sections with target lengths, VO lines, a graphic overlay, and a punch-in
+zoom. See the main [README](../../README.md#guide-driven-editing-for-a-real-shot-by-shot-edit-script)
+for how section-to-footage matching works.
