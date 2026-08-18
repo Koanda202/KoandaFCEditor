@@ -1,0 +1,23 @@
+[project]
+name = "koanda-fc-editor"
+version = "0.1.0"
+description = "Assemble edited videos from ROG Ally recording clips, VO lines, and a storyline file."
+requires-python = ">=3.9"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+koanda-editor = "storyline_editor.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["storyline_editor"]
