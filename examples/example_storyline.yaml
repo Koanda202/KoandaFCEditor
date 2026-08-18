@@ -1,33 +1,28 @@
-# Example storyline for koanda-editor.
+# Fully automatic storyline: point clips_dir at a folder of raw ROG Ally
+# recordings, list your scenes in order, and koanda-editor scans every
+# recording for the loudest/most-exciting moments and slots them into your
+# scenes for you — no timestamps required.
 #
-# Paths are resolved relative to this file's directory unless absolute.
-# Each scene trims a range out of a clip, optionally mixes in a VO line,
-# and scenes are concatenated in order into the final output.
+# Paths (clips_dir, vo files) are resolved relative to this file's directory
+# unless absolute.
 
 title: "ROG Ally Highlight Reel"
 output: "output/highlight_reel.mp4"
+clips_dir: "clips"          # folder of raw recordings to scan for highlights
+
+highlight_duration: 12       # seconds captured around each detected highlight
+highlight_min_gap: 20        # minimum seconds between two detected highlights
 
 scenes:
   - name: "Opening hook"
-    clip: "clips/opening_gameplay.mp4"
-    start: "00:00:05"
-    end: "00:00:18"
     vo: "vo/opening_line.mp3"
     vo_offset: "00:00:01"
     vo_volume: 1.0
     clip_volume: 0.25
 
   - name: "Boss fight"
-    clip: "clips/boss_fight.mp4"
-    start: "00:01:12"
-    end: "00:02:00"
     vo: "vo/boss_fight_line.mp3"
-    vo_offset: 0
-    vo_volume: 1.0
     clip_volume: 0.3
 
   - name: "Victory"
-    clip: "clips/victory_screen.mp4"
-    start: 0
-    end: "00:00:10"
     clip_volume: 1.0

@@ -3,7 +3,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from .ffmpeg_utils import run_ffmpeg, time_to_seconds
+from .ffmpeg_utils import probe_duration, run_ffmpeg, time_to_seconds
+from .highlights import select_highlights
 from .storyline import Scene, Storyline
 
 TARGET_WIDTH = 1920
@@ -19,6 +20,8 @@ _SCALE_FILTER = (
 def build_video(storyline: Storyline, *, keep_temp: bool = False, verbose: bool = False) -> Path:
     if not storyline.scenes:
         raise ValueError("Storyline has no scenes to build")
+
+    _resolve_auto_scenes(storyline, verbose=verbose)
 
     storyline.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -45,17 +48,55 @@ def build_video(storyline: Storyline, *, keep_temp: bool = False, verbose: bool 
     return storyline.output
 
 
+def _resolve_auto_scenes(storyline: Storyline, *, verbose: bool = False) -> None:
+    """Fill in clip/start/end for scenes that didn't specify them explicitly.
+
+    Such scenes are matched, in the order they're listed, to the strongest
+    highlight moments auto-detected across every recording in clips_dir.
+    """
+    auto_scenes = [s for s in storyline.scenes if s.clip is None]
+    if not auto_scenes:
+        return
+
+    if verbose:
+        print(f"scanning {storyline.clips_dir} for {len(auto_scenes)} highlight(s)...")
+    highlights = select_highlights(
+        storyline.clips_dir,
+        count=len(auto_scenes),
+        duration=storyline.highlight_duration,
+        min_gap=storyline.highlight_min_gap,
+        verbose=verbose,
+    )
+
+    half = storyline.highlight_duration / 2
+    for scene, candidate in zip(auto_scenes, highlights):
+        file_duration = probe_duration(candidate.file)
+        start = max(0.0, candidate.time - half)
+        end = min(file_duration, candidate.time + half)
+        scene.clip = candidate.file
+        scene.start = f"{start:.3f}"
+        scene.end = f"{end:.3f}"
+        if verbose:
+            print(
+                f"  matched scene {scene.name!r} -> {candidate.file.name} "
+                f"@ {start:.1f}s-{end:.1f}s (loudness score {candidate.score:.1f} dB)"
+            )
+
+
 def _render_scene(scene: Scene, out_path: Path) -> None:
     if not scene.clip.exists():
         raise FileNotFoundError(f"Scene {scene.name!r} references missing clip: {scene.clip}")
     if scene.vo and not scene.vo.exists():
         raise FileNotFoundError(f"Scene {scene.name!r} references missing VO file: {scene.vo}")
 
+    # -ss/-to MUST precede the clip's own -i: placed after it (and before a
+    # second -i for the VO track) they'd bind to that next input instead,
+    # silently leaving the clip untrimmed.
     if scene.vo is None:
         run_ffmpeg([
-            "-i", str(scene.clip),
             "-ss", scene.start,
             "-to", scene.end,
+            "-i", str(scene.clip),
             "-vf", _SCALE_FILTER,
             "-af", f"volume={scene.clip_volume}",
             "-c:v", "libx264", "-c:a", "aac",
@@ -71,9 +112,9 @@ def _render_scene(scene: Scene, out_path: Path) -> None:
         f"[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]"
     )
     run_ffmpeg([
-        "-i", str(scene.clip),
         "-ss", scene.start,
         "-to", scene.end,
+        "-i", str(scene.clip),
         "-i", str(scene.vo),
         "-filter_complex", filter_complex,
         "-map", "[vout]",

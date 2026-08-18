@@ -19,6 +19,29 @@ def require_ffmpeg() -> str:
     return exe
 
 
+def require_ffprobe() -> str:
+    exe = shutil.which("ffprobe")
+    if exe is None:
+        raise FFmpegNotFoundError(
+            "ffprobe was not found on PATH. It ships alongside ffmpeg; reinstall ffmpeg "
+            "if only the ffmpeg binary is present."
+        )
+    return exe
+
+
+def probe_duration(path) -> float:
+    cmd = [
+        require_ffprobe(), "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "csv=p=0",
+        str(path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0 or not result.stdout.strip():
+        raise RuntimeError(f"ffprobe failed to read duration for {path}:\n{result.stderr}")
+    return float(result.stdout.strip())
+
+
 _TIME_RE = re.compile(
     r"^(?:(?:(?P<hours>\d+):)?(?P<minutes>\d+):)?(?P<seconds>\d+(?:\.\d+)?)$"
 )

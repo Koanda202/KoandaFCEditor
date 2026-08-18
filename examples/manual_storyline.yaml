@@ -1,0 +1,29 @@
+# Manual override example: give a scene an explicit clip/start/end to pin
+# it to an exact moment instead of letting koanda-editor auto-detect it.
+# You can mix auto-detected and manual scenes freely in the same storyline
+# — any scene with 'clip' set (plus 'start' and 'end') is used as-is;
+# scenes without 'clip' still get auto-detected from clips_dir.
+
+title: "ROG Ally Highlight Reel (manual)"
+output: "output/highlight_reel.mp4"
+clips_dir: "clips"   # still required if any scene omits 'clip'
+
+scenes:
+  - name: "Opening hook"
+    clip: "clips/opening_gameplay.mp4"
+    start: "00:00:05"
+    end: "00:00:18"
+    vo: "vo/opening_line.mp3"
+    vo_offset: "00:00:01"
+    vo_volume: 1.0
+    clip_volume: 0.25
+
+  - name: "Boss fight"          # auto-detected, since no clip/start/end given
+    vo: "vo/boss_fight_line.mp3"
+    clip_volume: 0.3
+
+  - name: "Victory"
+    clip: "clips/victory_screen.mp4"
+    start: 0
+    end: "00:00:10"
+    clip_volume: 1.0

@@ -13,7 +13,7 @@ def write_storyline(tmp_path: Path, content: str) -> Path:
     return path
 
 
-def test_load_storyline_basic(tmp_path):
+def test_load_storyline_manual_scene(tmp_path):
     path = write_storyline(tmp_path, """
         title: Test
         output: out.mp4
@@ -79,7 +79,7 @@ def test_load_storyline_missing_scenes(tmp_path):
         load_storyline(path)
 
 
-def test_load_storyline_missing_required_field(tmp_path):
+def test_load_storyline_start_without_clip(tmp_path):
     path = write_storyline(tmp_path, """
         scenes:
           - name: Scene 1
@@ -88,6 +88,64 @@ def test_load_storyline_missing_required_field(tmp_path):
     """)
     with pytest.raises(ValueError):
         load_storyline(path)
+
+
+def test_load_storyline_clip_without_start_end(tmp_path):
+    path = write_storyline(tmp_path, """
+        scenes:
+          - name: Scene 1
+            clip: clips/a.mp4
+    """)
+    with pytest.raises(ValueError):
+        load_storyline(path)
+
+
+def test_load_storyline_auto_scene_requires_clips_dir(tmp_path):
+    path = write_storyline(tmp_path, """
+        scenes:
+          - name: Auto scene
+    """)
+    with pytest.raises(ValueError):
+        load_storyline(path)
+
+
+def test_load_storyline_auto_scene_with_clips_dir(tmp_path):
+    path = write_storyline(tmp_path, """
+        clips_dir: clips
+        highlight_duration: 8
+        highlight_min_gap: 15
+        scenes:
+          - name: Auto scene
+            vo: vo/line.mp3
+    """)
+
+    storyline = load_storyline(path)
+
+    assert storyline.clips_dir == tmp_path / "clips"
+    assert storyline.highlight_duration == 8.0
+    assert storyline.highlight_min_gap == 15.0
+    scene = storyline.scenes[0]
+    assert scene.clip is None
+    assert scene.start is None
+    assert scene.end is None
+    assert scene.vo == tmp_path / "vo" / "line.mp3"
+
+
+def test_load_storyline_mixed_manual_and_auto_scenes(tmp_path):
+    path = write_storyline(tmp_path, """
+        clips_dir: clips
+        scenes:
+          - name: Manual scene
+            clip: clips/intro.mp4
+            start: "0"
+            end: "5"
+          - name: Auto scene
+    """)
+
+    storyline = load_storyline(path)
+
+    assert storyline.scenes[0].clip == tmp_path / "clips" / "intro.mp4"
+    assert storyline.scenes[1].clip is None
 
 
 @pytest.mark.parametrize("value,expected", [

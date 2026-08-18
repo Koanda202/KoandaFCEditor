@@ -10,9 +10,9 @@ import yaml
 @dataclasses.dataclass
 class Scene:
     name: str
-    clip: Path
-    start: str
-    end: str
+    clip: Optional[Path] = None
+    start: Optional[str] = None
+    end: Optional[str] = None
     vo: Optional[Path] = None
     vo_offset: str = "0"
     vo_volume: float = 1.0
@@ -24,6 +24,9 @@ class Storyline:
     title: str
     output: Path
     scenes: list[Scene]
+    clips_dir: Optional[Path] = None
+    highlight_duration: float = 12.0
+    highlight_min_gap: float = 6.0
 
 
 def load_storyline(path: Path) -> Storyline:
@@ -39,34 +42,51 @@ def load_storyline(path: Path) -> Storyline:
     if not scenes_data:
         raise ValueError(f"Storyline file has no scenes: {path}")
 
-    scenes = []
-    for i, scene_data in enumerate(scenes_data):
-        try:
-            scenes.append(_parse_scene(scene_data, base_dir))
-        except KeyError as e:
-            raise ValueError(f"Scene {i} in {path} is missing required field: {e}") from e
+    scenes = [_parse_scene(s, base_dir, i) for i, s in enumerate(scenes_data)]
 
+    clips_dir = data.get("clips_dir")
     output = data.get("output", "output.mp4")
-    return Storyline(
+    storyline = Storyline(
         title=data.get("title", path.stem),
         output=_resolve(output, base_dir),
         scenes=scenes,
+        clips_dir=_resolve(clips_dir, base_dir) if clips_dir else None,
+        highlight_duration=float(data.get("highlight_duration", 12.0)),
+        highlight_min_gap=float(data.get("highlight_min_gap", 6.0)),
     )
 
+    needs_auto = any(s.clip is None for s in storyline.scenes)
+    if needs_auto and storyline.clips_dir is None:
+        raise ValueError(
+            f"{path}: one or more scenes have no 'clip' set (auto-detect mode), but the "
+            "storyline has no top-level 'clips_dir' pointing at your recordings folder."
+        )
+    return storyline
 
-def _parse_scene(data: dict, base_dir: Path) -> Scene:
-    name = data.get("name", "scene")
-    clip = _resolve(data["clip"], base_dir)
-    start = str(data.get("start", 0))
-    end = str(data["end"])
+
+def _parse_scene(data: dict, base_dir: Path, index: int) -> Scene:
+    name = data.get("name", f"scene_{index}")
+    clip = data.get("clip")
+    start = data.get("start")
+    end = data.get("end")
+
+    if clip is not None and (start is None or end is None):
+        raise ValueError(
+            f"Scene {name!r} (index {index}) sets 'clip' but is missing 'start' and/or 'end' "
+            "— either provide all three for a manual scene, or none of them to auto-detect."
+        )
+    if clip is None and (start is not None or end is not None):
+        raise ValueError(
+            f"Scene {name!r} (index {index}) sets 'start'/'end' but is missing 'clip'"
+        )
+
     vo = data.get("vo")
-    vo_path = _resolve(vo, base_dir) if vo else None
     return Scene(
         name=name,
-        clip=clip,
-        start=start,
-        end=end,
-        vo=vo_path,
+        clip=_resolve(clip, base_dir) if clip else None,
+        start=str(start) if start is not None else None,
+        end=str(end) if end is not None else None,
+        vo=_resolve(vo, base_dir) if vo else None,
         vo_offset=str(data.get("vo_offset", 0)),
         vo_volume=float(data.get("vo_volume", 1.0)),
         clip_volume=float(data.get("clip_volume", 1.0)),
