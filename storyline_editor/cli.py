@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .editor import build_video
 from .ffmpeg_utils import FFmpegNotFoundError
+from .project import load_project
 from .storyline import load_storyline
 
 
@@ -14,13 +15,19 @@ def main(argv: list[str] | None = None) -> int:
         prog="koanda-editor",
         description=(
             "Assemble an edited video from ROG Ally recording clips, VO lines, "
-            "and a storyline file."
+            "and a story."
         ),
     )
-    parser.add_argument("storyline", type=Path, help="Path to the storyline YAML file")
+    parser.add_argument(
+        "path", type=Path,
+        help=(
+            "A project folder containing clips/, vo/, and story.txt "
+            "(zero-config mode) — or a storyline YAML file for manual control"
+        ),
+    )
     parser.add_argument(
         "-o", "--output", type=Path, default=None,
-        help="Override the output path from the storyline file",
+        help="Override the output path",
     )
     parser.add_argument(
         "--keep-scenes", action="store_true",
@@ -30,7 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        storyline = load_storyline(args.storyline)
+        if args.path.is_dir():
+            storyline = load_project(args.path)
+        else:
+            storyline = load_storyline(args.path)
         if args.output:
             storyline.output = args.output
         output = build_video(storyline, keep_temp=args.keep_scenes, verbose=not args.quiet)

@@ -1,0 +1,7 @@
+# This is the whole story file: one scene per line, in the order you want
+# them to play. Lines starting with # (like this one) and blank lines are
+# ignored. Nothing else is needed here — no timestamps, no clip names.
+
+Opening hook
+Boss fight
+Victory
