@@ -131,9 +131,15 @@ scorelines, minute markers, reveal screens. `koanda-editor` OCR-scans your
 recordings for that text and matches it to numbers/phrases in each
 section — these sections are **confirmed**. A section with no on-screen
 signal (a pure gameplay action beat like an assist or a save) can't be
-found this way, so it's **best-guessed** instead, using loudness plus the
-constraint that it must fall chronologically between its confirmed
-neighbors — and it's clearly flagged in the output for you to check:
+found this way, so it's **best-guessed** instead using loudness. Either
+way, if you have multiple recordings in `clips/` (e.g. one file per match),
+they're treated as one combined timeline in filename order — a single
+cursor only ever moves forward through that timeline as sections are
+resolved in guide order, so a keyword that happens to recur in an earlier
+or later recording (a minute marker like `45'` shows up in every match)
+can never pull a section backward or skip it ahead out of sequence. Best
+guesses are constrained the same way, and every unconfirmed section is
+clearly flagged in the output for you to check:
 
 ```bash
 koanda-editor my-video
@@ -148,6 +154,12 @@ done: my-video/output/final_video.mp4
 OCR results are cached per-recording in `.koanda_cache/` inside your
 project folder, so editing `guide.txt` and re-running doesn't re-scan
 footage that hasn't changed.
+
+**VO files are matched to guide lines by content, not filename order.**
+Name them however makes sense to you (`yallop_first_game.mp3`,
+`hat_trick_line.mp3`, ...) — each `vo/` file is paired with whichever
+quoted line in the guide shares the most words with its filename, so
+sorted-alphabetically-by-name is never assumed to equal guide order.
 
 ## Running tests
 

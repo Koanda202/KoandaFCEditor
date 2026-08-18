@@ -83,3 +83,46 @@ def test_find_section_anchors_confirms_ocr_matches_and_flags_fallback(tmp_path):
 
     assert by_number[2].confirmed is False
     assert by_number[1].time <= by_number[2].time <= by_number[3].time
+
+
+def test_find_section_anchors_never_moves_backward_across_files(tmp_path):
+    # session_1 and session_3 both contain "45'" (a minute marker that
+    # naturally recurs across different matches). A section that belongs
+    # in session_2 must not accidentally anchor back into session_1's or
+    # forward-skip past session_2 into session_3's "45'" occurrence.
+    clips_dir = tmp_path / "clips"
+    clips_dir.mkdir()
+    _make_clip(
+        clips_dir / "session_1.mp4", duration=10, loud_at=7,
+        texts=[("45MIN", 2, 4)],
+    )
+    _make_clip(
+        clips_dir / "session_2.mp4", duration=10, loud_at=7,
+        texts=[("HAT TRICK", 6, 8)],
+    )
+    _make_clip(
+        clips_dir / "session_3.mp4", duration=10, loud_at=7,
+        texts=[("45MIN", 3, 5)],
+    )
+
+    sections = [
+        _section(1, "SETUP", ["45MIN"]),
+        _section(2, "MIDDLE ACTION", []),  # no on-screen anchor of its own
+        _section(3, "TRICK", ["HAT TRICK"]),
+        _section(4, "LATE SETUP", ["45MIN"]),
+    ]
+
+    anchors = find_section_anchors(
+        sections, clips_dir, tmp_path / "cache", ocr_interval=1.0
+    )
+    by_number = {a.section.number: a for a in anchors}
+
+    assert by_number[1].file.name == "session_1.mp4"
+    assert by_number[3].file.name == "session_2.mp4"
+    # section 4's "45'" occurs in session_1 (behind the cursor) and
+    # session_3 (ahead) — it must take the forward one, not backslide.
+    assert by_number[4].file.name == "session_3.mp4"
+
+    file_rank = {"session_1.mp4": 0, "session_2.mp4": 1, "session_3.mp4": 2}
+    ranks = [file_rank[by_number[i].file.name] for i in (1, 2, 3, 4)]
+    assert ranks == sorted(ranks)

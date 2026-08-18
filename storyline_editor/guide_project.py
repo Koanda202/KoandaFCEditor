@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from .anchors import find_section_anchors
@@ -10,6 +11,7 @@ from .storyline import Scene, Storyline
 GUIDE_FILENAMES = ("guide.txt", "editing_guide.txt", "edit_guide.txt")
 DEFAULT_SECTION_SECONDS = 12.0
 PRE_ROLL_FRACTION = 0.7  # most of the window leads up to the anchor moment
+_WORD_RE = re.compile(r"[a-z0-9]+")
 
 
 def find_guide_file(project_dir: Path):
@@ -40,7 +42,7 @@ def load_guide_project(project_dir: Path, guide_file: Path, *, verbose: bool = F
 
     vo_dir = project_dir / "vo"
     vo_files = _find_vo_files(vo_dir) if vo_dir.is_dir() else []
-    vo_by_section = _assign_vo_files(sections, vo_files)
+    vo_by_section = _match_vo_files_to_lines(sections, vo_files)
 
     cache_dir = project_dir / ".koanda_cache"
     anchors = find_section_anchors(sections, clips_dir, cache_dir, verbose=verbose)
@@ -93,15 +95,60 @@ def _section_duration(section) -> float:
     return DEFAULT_SECTION_SECONDS
 
 
-def _assign_vo_files(sections, vo_files):
-    """Flatten VO lines across sections, in guide order, and pair them 1:1
-    with sorted vo/ files (same convention as plain story.txt mode)."""
+def _words(text: str) -> set:
+    return set(_WORD_RE.findall(text.lower()))
+
+
+def _match_vo_files_to_lines(sections, vo_files):
+    """Match vo/ files to guide VO lines by content, not filename order.
+
+    Files are commonly named after what's said (e.g. "yallop_first_game.mp3"
+    for the line "This was Mitchell Yallop's first game...") rather than
+    numbered to match guide order, so sorted-filename pairing silently
+    scrambles playback. Score every (line, file) pair by how much of the
+    filename's words appear in the line's words, then greedily assign
+    highest-confidence pairs first.
+    """
+    line_entries = [
+        (section.number, line) for section in sections for line in section.vo_lines
+    ]
+    if not line_entries or not vo_files:
+        return {}
+
+    file_words = {f: _words(f.stem) for f in vo_files}
+    line_word_sets = [_words(text) for _, text in line_entries]
+
+    pairs = []
+    for li, lw in enumerate(line_word_sets):
+        for f in vo_files:
+            fw = file_words[f]
+            if not fw:
+                continue
+            overlap = len(lw & fw)
+            if overlap == 0:
+                continue
+            pairs.append((overlap / len(fw), li, f))
+    pairs.sort(key=lambda p: p[0], reverse=True)
+
+    assigned = [None] * len(line_entries)
+    used_files = set()
+    for _score, li, f in pairs:
+        if assigned[li] is not None or f in used_files:
+            continue
+        assigned[li] = f
+        used_files.add(f)
+
+    # Leftover lines/files (no shared words at all) get paired in original
+    # order as a last resort, so nothing is silently dropped.
+    remaining_files = [f for f in vo_files if f not in used_files]
+    ri = 0
+    for li in range(len(line_entries)):
+        if assigned[li] is None and ri < len(remaining_files):
+            assigned[li] = remaining_files[ri]
+            ri += 1
+
     assignments = {}
-    cursor = 0
-    for section in sections:
-        count = len(section.vo_lines)
-        assigned = vo_files[cursor:cursor + count]
-        if assigned:
-            assignments[section.number] = assigned
-        cursor += count
+    for (section_number, _text), f in zip(line_entries, assigned):
+        if f is not None:
+            assignments.setdefault(section_number, []).append(f)
     return assignments

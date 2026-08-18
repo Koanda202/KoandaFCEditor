@@ -4,14 +4,19 @@ from pathlib import Path
 
 import pytest
 
-from storyline_editor.guide_project import find_guide_file, load_guide_project
+from storyline_editor.guide_project import (
+    _match_vo_files_to_lines,
+    find_guide_file,
+    load_guide_project,
+)
+from storyline_editor.guide import parse_guide
 
 HAS_TOOLS = (
     shutil.which("ffmpeg") is not None
     and shutil.which("ffprobe") is not None
     and shutil.which("tesseract") is not None
 )
-pytestmark = pytest.mark.skipif(not HAS_TOOLS, reason="requires ffmpeg/ffprobe/tesseract")
+requires_tools = pytest.mark.skipif(not HAS_TOOLS, reason="requires ffmpeg/ffprobe/tesseract")
 
 GUIDE = """
 ============================================================
@@ -69,6 +74,46 @@ def test_find_guide_file(tmp_path):
     assert find_guide_file(tmp_path) == tmp_path / "guide.txt"
 
 
+def test_match_vo_files_to_lines_ignores_filename_order(tmp_path):
+    # Files named after content, not numbered — alphabetical sort would
+    # pair them in the wrong order relative to the guide's VO lines.
+    guide_text = """
+============================================================
+SECTION 1 — INTRO
+============================================================
+
+VO
+--
+"This was Mitchell Yallop's first game for Koanda FC."
+"It went reasonably well."
+
+
+============================================================
+SECTION 2 — REVEAL
+============================================================
+
+VO
+--
+"Ninety-nine potential."
+"""
+    sections = parse_guide(guide_text)
+
+    vo_dir = tmp_path / "vo"
+    vo_dir.mkdir()
+    yallop_first_game = vo_dir / "yallop_first_game.mp3"
+    reasonably_well = vo_dir / "reasonably_well.mp3"
+    ninety_nine_potential = vo_dir / "ninety_nine_potential.mp3"
+    for f in (yallop_first_game, reasonably_well, ninety_nine_potential):
+        f.touch()
+    vo_files = sorted(vo_dir.iterdir())  # alphabetical: ninety_nine < reasonably < yallop
+
+    assignments = _match_vo_files_to_lines(sections, vo_files)
+
+    assert assignments[1] == [yallop_first_game, reasonably_well]
+    assert assignments[2] == [ninety_nine_potential]
+
+
+@requires_tools
 def test_load_guide_project_builds_scenes_and_matches_vo(tmp_path):
     project = tmp_path / "proj"
     (project / "clips").mkdir(parents=True)
@@ -92,6 +137,7 @@ def test_load_guide_project_builds_scenes_and_matches_vo(tmp_path):
     assert 4.5 <= anchors[0].time <= 7.5
 
 
+@requires_tools
 def test_load_guide_project_missing_clips_dir(tmp_path):
     project = tmp_path / "proj"
     project.mkdir()
